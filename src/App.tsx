@@ -6,7 +6,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { CartProvider } from "@/hooks/useCart";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
-import { Admin } from "./pages/Admin"; // 1. Importamos a sua nova página
+import { Admin } from "./pages/Admin";
+import { Auth } from "./pages/Auth"; // 1. Importação da tela de login
 
 const queryClient = new QueryClient();
 
@@ -20,7 +21,10 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             
-            {/* 2. Rota do seu Painel Administrativo */}
+            {/* 2. Rota do Login (Essencial para a trava de segurança) */}
+            <Route path="/auth" element={<Auth />} />
+            
+            {/* 3. Rota do seu Painel Administrativo */}
             <Route path="/admin" element={<Admin />} />
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
