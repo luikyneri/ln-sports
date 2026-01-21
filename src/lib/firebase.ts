@@ -1,7 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
-import { getAuth } from "firebase/auth"; // 1. Adicionamos a importação do Auth
+import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -13,11 +13,21 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
+// --- TESTE DE OURO (DEBUG) ---
+console.log("=== DEBUG FIREBASE LN SPORTS ===");
+console.log("API Key carregada?", !!import.meta.env.VITE_FIREBASE_API_KEY);
+console.log("Project ID carregado?", !!import.meta.env.VITE_FIREBASE_PROJECT_ID);
+if (!import.meta.env.VITE_FIREBASE_API_KEY) {
+  console.error("ALERTA: A API Key está vindo vazia! Verifique as variáveis na Vercel.");
+}
+// -----------------------------
+
 // Inicializa o Firebase
 const app = initializeApp(firebaseConfig);
 
-// Exporta os serviços que sua loja usa
+// Exporta os serviços
 export const db = getFirestore(app);
 export const storage = getStorage(app);
-export const auth = getAuth(app); // 2. Exportamos o serviço de autenticação
+export const auth = getAuth(app);
+
 export default app;

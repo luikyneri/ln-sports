@@ -266,7 +266,7 @@ export const Admin = () => {
               </button>
             </form>
             <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-              {dbTeams.filter((t: any) => (teamFilterLeague === "all" || t.league === teamFilterLeague)).map((t: any) => (
+              {dbTeams.filter((t: any) => (listFilterLeague === "all" || t.league === listFilterLeague)).map((t: any) => (
                 <div key={t.id} className="bg-white p-4 rounded-2xl border text-center relative group">
                   <img src={t.badge} className="h-10 mx-auto mb-2 object-contain" />
                   <p className="text-[9px] font-black uppercase leading-tight">{t.name}</p>
