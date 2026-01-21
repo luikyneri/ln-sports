@@ -33,7 +33,7 @@ export const Auth = () => {
           <input 
             type="email" 
             placeholder="E-mail" 
-            className="w-full p-4 border rounded-xl text-sm font-bold bg-slate-50"
+            className="w-full p-4 border rounded-xl text-sm font-bold bg-slate-50 text-slate-900 placeholder:text-slate-400"
             value={email} 
             onChange={(e) => setEmail(e.target.value)} 
             required 
@@ -41,7 +41,7 @@ export const Auth = () => {
           <input 
             type="password" 
             placeholder="Senha" 
-            className="w-full p-4 border rounded-xl text-sm font-bold bg-slate-50"
+            className="w-full p-4 border rounded-xl text-sm font-bold bg-slate-50 text-slate-900 placeholder:text-slate-400"
             value={password} 
             onChange={(e) => setPassword(e.target.value)} 
             required 
