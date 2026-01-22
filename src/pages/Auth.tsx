@@ -15,8 +15,8 @@ export const Auth = () => {
       await signInWithEmailAndPassword(auth, email, password);
       navigate("/admin");
     } catch (err) {
-      setError(err.code);
-    }
+  setError("E-mail ou senha incorretos.");
+}
   };
 
   return (
