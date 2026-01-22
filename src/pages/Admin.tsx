@@ -12,6 +12,9 @@ export const Admin = () => {
   const [uploading, setUploading] = useState(false);
   const [hasOrderChanges, setHasOrderChanges] = useState(false);
   
+  // ESTADO NOVO: Para controlar visualmente quando você arrasta algo em cima
+  const [isDragging, setIsDragging] = useState(false);
+
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [dbShirts, setDbShirts] = useState<any[]>([]);
@@ -36,9 +39,6 @@ export const Admin = () => {
       if (!user) {
         navigate("/auth"); 
       } else {
-        // --- CONEXÃO COM FILTROS SAAS ---
-        
-        // Buscar LIGAS do usuário logado
         const qLigas = query(collection(db, "LIGAS"), where("userId", "==", user.uid));
         const unsubLigas = onSnapshot(qLigas, (snap) => {
           const data = snap.docs.map(d => ({
@@ -50,13 +50,11 @@ export const Admin = () => {
           setHasOrderChanges(false);
         });
 
-        // Buscar TIMES do usuário logado
         const qTimes = query(collection(db, "TIMES"), where("userId", "==", user.uid));
         const unsubTimes = onSnapshot(qTimes, (snap) => {
           setDbTeams(snap.docs.map(d => ({ ...d.data(), id: d.id })));
         });
 
-        // Buscar CAMISAS do usuário logado
         const qCamisas = query(collection(db, "CAMISAS"), where("userId", "==", user.uid));
         const unsubCamisas = onSnapshot(qCamisas, (snap) => {
           setDbShirts(snap.docs.map(d => ({ ...d.data(), id: d.id })));
@@ -87,7 +85,7 @@ export const Admin = () => {
         ...shirtData, 
         liga: selectedLeague ? selectedLeague.name : shirtData.liga,
         preco: Number(shirtData.preco),
-        userId: user.uid, // Prepara para SaaS
+        userId: user.uid, 
         updatedAt: new Date()
       };
 
@@ -111,7 +109,7 @@ export const Admin = () => {
       const teamToSave = { 
         ...newTeam, 
         league: selectedLeague ? selectedLeague.name : newTeam.league,
-        userId: user.uid // Prepara para SaaS
+        userId: user.uid 
       };
 
       if (editingId) await updateDoc(doc(db, "TIMES", editingId), teamToSave);
@@ -133,7 +131,7 @@ export const Admin = () => {
       await addDoc(collection(db, "LIGAS"), { 
         name: newLeague.name.toUpperCase(), 
         order: dbLeagues.length,
-        userId: user.uid // Prepara para SaaS
+        userId: user.uid 
       });
       setNewLeague({ name: "" });
     } catch (err) { alert("Erro ao criar liga"); }
@@ -159,8 +157,8 @@ export const Admin = () => {
     setHasOrderChanges(true);
   };
 
+  // --- NOVA FUNÇÃO DE UPLOAD ÚNICO ---
   const uploadImage = async (file: File) => {
-    setUploading(true);
     const formData = new FormData();
     formData.append("file", file);
     formData.append("upload_preset", UPLOAD_PRESET);
@@ -168,7 +166,30 @@ export const Admin = () => {
       const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: "POST", body: formData });
       const data = await res.json();
       return data.secure_url;
-    } catch (err) { return null; } finally { setUploading(false); }
+    } catch (err) { return null; }
+  };
+
+  // --- NOVA FUNÇÃO MÁGICA DE UPLOAD MÚLTIPLO ---
+  const processFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    
+    const fileArray = Array.from(files);
+    
+    try {
+      // Faz o upload de todas as imagens ao mesmo tempo (Paralelo)
+      const uploadPromises = fileArray.map(file => uploadImage(file));
+      const urls = await Promise.all(uploadPromises);
+      
+      // Filtra erros e adiciona as novas URLs às que já existem
+      const validUrls = urls.filter(url => url !== null);
+      setShirtData(prev => ({ ...prev, imagens: [...prev.imagens, ...validUrls] }));
+    } catch (error) {
+      console.error("Erro no upload múltiplo:", error);
+    } finally {
+      setUploading(false);
+      setIsDragging(false);
+    }
   };
 
   if (loading) {
@@ -215,24 +236,36 @@ export const Admin = () => {
               </select>
               <input placeholder="Modelo (Ex: Home 24/25)" className="w-full p-3 border rounded-xl text-xs font-bold" value={shirtData.modelo} onChange={e => setShirtData({...shirtData, modelo: e.target.value})} required />
               <input placeholder="Preço" type="number" className="w-full p-3 border rounded-xl text-xs font-bold" value={shirtData.preco} onChange={e => setShirtData({...shirtData, preco: e.target.value})} required />
-              <div className="border-2 border-dashed p-4 rounded-xl flex flex-wrap gap-2">
+              
+              {/* --- ÁREA DE UPLOAD INTELIGENTE (Drag & Drop) --- */}
+              <div 
+                className={`border-2 border-dashed p-4 rounded-xl flex flex-wrap gap-2 transition-all ${isDragging ? 'border-blue-500 bg-blue-50 scale-[1.02]' : 'border-slate-300'}`}
+                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={(e) => { e.preventDefault(); processFiles(e.dataTransfer.files); }}
+              >
                  {shirtData.imagens.map((img: string, i: number) => (
                    <div key={i} className="relative group">
-                     <img src={img} className="h-12 w-12 object-cover rounded-lg border" />
-                     <button type="button" onClick={() => setShirtData({...shirtData, imagens: shirtData.imagens.filter((_, idx) => idx !== i)})} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-4 h-4 text-[10px]">x</button>
+                     <img src={img} className="h-16 w-16 object-cover rounded-lg border shadow-sm" />
+                     <button type="button" onClick={() => setShirtData({...shirtData, imagens: shirtData.imagens.filter((_, idx) => idx !== i)})} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] shadow-md z-10">x</button>
                    </div>
                  ))}
-                 <label className="h-12 w-12 border-2 border-blue-200 rounded-lg flex items-center justify-center cursor-pointer font-bold text-blue-500">
-                   <input type="file" className="hidden" onChange={async (e) => { 
-                     const file = e.target.files?.[0];
-                     if (file) {
-                       const url = await uploadImage(file); 
-                       if (url) setShirtData(p => ({ ...p, imagens: [...p.imagens, url] })); 
-                     }
-                   }} />
-                   {uploading ? "..." : "+"}
+                 
+                 <label className={`h-16 flex-1 min-w-[64px] border-2 border-blue-200 rounded-lg flex flex-col items-center justify-center cursor-pointer font-bold text-blue-500 hover:bg-blue-50 transition-colors ${uploading ? 'animate-pulse' : ''}`}>
+                   <input 
+                     type="file" 
+                     className="hidden" 
+                     multiple // <--- PERMITE SELECIONAR VÁRIOS NO CLIQUE
+                     accept="image/*"
+                     onChange={(e) => processFiles(e.target.files)} 
+                   />
+                   <span className="text-xl">{uploading ? "⏳" : "+"}</span>
+                   <span className="text-[8px] uppercase text-center px-2">
+                     {uploading ? "Enviando..." : (isDragging ? "Solte Agora!" : "Arraste ou Clique")}
+                   </span>
                  </label>
               </div>
+
               <button className={`w-full text-white p-4 rounded-xl font-black uppercase text-xs ${editingId ? 'bg-orange-500' : 'bg-blue-600'}`}>
                 {loading ? "Processando..." : (editingId ? "Atualizar" : "Salvar Camisa")}
               </button>
