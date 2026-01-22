@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { db, auth } from "@/lib/firebase"; 
 import { useNavigate } from "react-router-dom";
 import { 
-  collection, addDoc, deleteDoc, doc, updateDoc, onSnapshot 
+  collection, addDoc, deleteDoc, doc, updateDoc, onSnapshot, query, where 
 } from "firebase/firestore";
 
 export const Admin = () => {
@@ -27,7 +27,6 @@ export const Admin = () => {
   const [listFilterLeague, setListFilterLeague] = useState("all"); 
   const [listFilterTeam, setListFilterTeam] = useState("all"); 
   const [searchShirt, setSearchShirt] = useState("");
-  const [searchTeam, setSearchTeam] = useState("");
 
   const CLOUD_NAME = "dyl7ygnd6"; 
   const UPLOAD_PRESET = "catalogo_camisas"; 
@@ -37,45 +36,59 @@ export const Admin = () => {
       if (!user) {
         navigate("/auth"); 
       } else {
+        // --- CONEXÃO COM FILTROS SAAS ---
+        
+        // Buscar LIGAS do usuário logado
+        const qLigas = query(collection(db, "LIGAS"), where("userId", "==", user.uid));
+        const unsubLigas = onSnapshot(qLigas, (snap) => {
+          const data = snap.docs.map(d => ({
+            ...d.data(),
+            id: d.id,
+            order: typeof (d.data() as any).order === 'number' ? (d.data() as any).order : 999
+          }));
+          setDbLeagues(data.sort((a, b) => a.order - b.order));
+          setHasOrderChanges(false);
+        });
+
+        // Buscar TIMES do usuário logado
+        const qTimes = query(collection(db, "TIMES"), where("userId", "==", user.uid));
+        const unsubTimes = onSnapshot(qTimes, (snap) => {
+          setDbTeams(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+        });
+
+        // Buscar CAMISAS do usuário logado
+        const qCamisas = query(collection(db, "CAMISAS"), where("userId", "==", user.uid));
+        const unsubCamisas = onSnapshot(qCamisas, (snap) => {
+          setDbShirts(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+        });
+
         setLoading(false);
+
+        return () => {
+          unsubLigas();
+          unsubTimes();
+          unsubCamisas();
+        };
       }
     });
 
-    const unsubLigas = onSnapshot(collection(db, "LIGAS"), (snap) => {
-      const data = snap.docs.map(d => ({
-        ...d.data(),
-        id: d.id,
-        order: typeof (d.data() as any).order === 'number' ? (d.data() as any).order : 999
-      }));
-      setDbLeagues(data.sort((a, b) => a.order - b.order));
-      setHasOrderChanges(false);
-    });
-
-    const unsubTimes = onSnapshot(collection(db, "TIMES"), (snap) => {
-      setDbTeams(snap.docs.map(d => ({ ...d.data(), id: d.id })));
-    });
-
-    const unsubCamisas = onSnapshot(collection(db, "CAMISAS"), (snap) => {
-      setDbShirts(snap.docs.map(d => ({ ...d.data(), id: d.id })));
-    });
-
-    return () => { 
-      unsubscribeAuth();
-      unsubLigas(); 
-      unsubTimes(); 
-      unsubCamisas(); 
-    };
+    return () => unsubscribeAuth();
   }, [navigate]);
 
   const handleSaveShirt = async (e: React.FormEvent) => {
     e.preventDefault();
+    const user = auth.currentUser;
+    if (!user) return;
+
     setLoading(true);
     try {
       const selectedLeague = dbLeagues.find((l: any) => l.id === shirtData.liga);
       const dataToSave = { 
         ...shirtData, 
         liga: selectedLeague ? selectedLeague.name : shirtData.liga,
-        preco: Number(shirtData.preco) 
+        preco: Number(shirtData.preco),
+        userId: user.uid, // Prepara para SaaS
+        updatedAt: new Date()
       };
 
       if (editingId) await updateDoc(doc(db, "CAMISAS", editingId), dataToSave);
@@ -83,18 +96,22 @@ export const Admin = () => {
       
       setShirtData({ time: "", liga: "", modelo: "", imagens: [], preco: "" });
       setEditingId(null);
-    } catch (err) { alert("Erro ao salvar"); }
+    } catch (err) { alert("Erro ao salvar camisa"); }
     finally { setLoading(false); }
   };
 
   const handleSaveTeam = async (e: React.FormEvent) => {
     e.preventDefault();
+    const user = auth.currentUser;
+    if (!user) return;
+
     setLoading(true);
     try {
       const selectedLeague = dbLeagues.find((l: any) => l.id === newTeam.league);
       const teamToSave = { 
         ...newTeam, 
-        league: selectedLeague ? selectedLeague.name : newTeam.league 
+        league: selectedLeague ? selectedLeague.name : newTeam.league,
+        userId: user.uid // Prepara para SaaS
       };
 
       if (editingId) await updateDoc(doc(db, "TIMES", editingId), teamToSave);
@@ -102,7 +119,24 @@ export const Admin = () => {
       
       setNewTeam({ name: "", league: "", badge: "" });
       setEditingId(null);
-    } catch (err) { alert("Erro"); }
+    } catch (err) { alert("Erro ao salvar time"); }
+    finally { setLoading(false); }
+  };
+
+  const handleSaveLeague = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const user = auth.currentUser;
+    if (!user) return;
+
+    setLoading(true);
+    try {
+      await addDoc(collection(db, "LIGAS"), { 
+        name: newLeague.name.toUpperCase(), 
+        order: dbLeagues.length,
+        userId: user.uid // Prepara para SaaS
+      });
+      setNewLeague({ name: "" });
+    } catch (err) { alert("Erro ao criar liga"); }
     finally { setLoading(false); }
   };
 
@@ -113,7 +147,7 @@ export const Admin = () => {
         await updateDoc(doc(db, "LIGAS", dbLeagues[i].id), { order: i });
       }
       alert("✅ Ordem salva!");
-    } catch (err) { alert("Erro"); } finally { setLoading(false); }
+    } catch (err) { alert("Erro ao ordenar"); } finally { setLoading(false); }
   };
 
   const handleDrop = (e: React.DragEvent, destIndex: number) => {
@@ -282,14 +316,7 @@ export const Admin = () => {
 
         {tab === "ligas" && (
           <div className="space-y-6">
-            <form onSubmit={async (e) => {
-              e.preventDefault(); setLoading(true);
-              try {
-                await addDoc(collection(db, "LIGAS"), { name: newLeague.name.toUpperCase(), order: dbLeagues.length });
-                setNewLeague({ name: "" });
-              } catch (err) { alert("Erro ao criar liga"); }
-              finally { setLoading(false); }
-            }} className="bg-white p-6 rounded-2xl border shadow-sm flex gap-3">
+            <form onSubmit={handleSaveLeague} className="bg-white p-6 rounded-2xl border shadow-sm flex gap-3">
               <input placeholder="Nome da Nova Liga (Ex: Brasileirão)..." className="flex-1 p-4 border rounded-xl text-xs font-bold uppercase" value={newLeague.name} onChange={e => setNewLeague({name: e.target.value})} required />
               <button className="bg-blue-700 text-white px-8 rounded-xl font-black uppercase text-xs">Criar Liga</button>
             </form>
