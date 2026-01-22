@@ -1,24 +1,22 @@
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, where } from 'firebase/firestore'; // Adicionamos query e where
-import { db, auth } from '../lib/firebase'; // Importamos o auth
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { useSearchParams } from 'react-router-dom'; 
 
 export const useFirebaseShirts = () => {
   const [shirts, setShirts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchParams] = useSearchParams();
+
+  // 1. CAPTURA O ID DA URL: ex: seusite.com/?loja=ID_AQUI
+  // Se não houver nada na URL, ele usa o seu ID por padrão
+  const lojaId = searchParams.get('loja') || "4zoEZXPbAfNAPnWscpluiWL0gU63"; 
 
   useEffect(() => {
-    const user = auth.currentUser;
-
-    // Se não houver usuário logado, não tentamos buscar para evitar erros
-    if (!user) {
-      setLoading(false);
-      return;
-    }
-
-    // A MÁGICA DO SAAS: Filtramos a coleção pelo userId do usuário logado
+    // 2. BUSCA DINÂMICA: Filtra pelo ID capturado
     const q = query(
       collection(db, "CAMISAS"),
-      where("userId", "==", user.uid)
+      where("userId", "==", lojaId)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -29,19 +27,19 @@ export const useFirebaseShirts = () => {
           time: data.time || "",
           liga: data.liga || "",
           modelo: data.modelo || "",
+          preco: data.preco || 0,
           imagens: data.imagens || (data.imagem ? [data.imagem] : []),
-          userId: data.userId || "" // Guardamos o ID do dono para conferência
         };
       });
       setShirts(shirtList);
       setLoading(false);
     }, (error) => {
-      console.error("Erro ao buscar camisas:", error);
+      console.error("Erro na captura automática:", error);
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [lojaId]); // Se o ID na URL mudar, o site atualiza os produtos na hora
 
   return { shirts, loading };
 };
